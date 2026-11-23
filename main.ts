@@ -13,8 +13,23 @@
 // free), keeps the risk low (no coding, nothing to lose but "someday"),
 // and promises only a first version — no overpromising.
 
+// Usage: node main.ts [--help]
+//   Writes the one-line pitch to $MAKEFUN_OUTPUT_DIR/entry.txt
+//   (default /output/entry.txt) and prints it with its character count.
+//   Exits non-zero with a clear error if the pitch breaks the gate:
+//   it must be a single line of 1-240 characters.
+
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log("Usage: node main.ts [--help]");
+  console.log("Writes a one-line pitch to $MAKEFUN_OUTPUT_DIR/entry.txt");
+  console.log("(default /output/entry.txt). The pitch must be a single");
+  console.log("line of 1-240 characters; the program exits non-zero");
+  console.log("with an error message if that gate is not met.");
+  process.exit(0);
+}
 
 const PITCH =
   "That app idea you keep bringing up? Describe it in plain words on " +
@@ -22,14 +37,33 @@ const PITCH =
   "tap on today \u2014 free, no coding, and the only thing you risk is " +
   "finally starting.";
 
-// Sanity check the gate before writing: 1-240 chars, not only whitespace.
-if (PITCH.length < 1 || PITCH.length > 240 || PITCH.trim().length === 0) {
-  throw new Error(`pitch fails the 1-240 character gate (${PITCH.length} chars)`);
+// Validate the gate before writing: 1-240 chars, a single line,
+// not only whitespace. Fail loudly (exit 1) instead of writing a
+// bad entry.
+const gateError =
+  PITCH.length < 1 || PITCH.length > 240
+    ? `pitch fails the 1-240 character gate (${PITCH.length} chars)`
+    : /[\r\n]/.test(PITCH)
+      ? "pitch must be a single line (no newline characters)"
+      : PITCH.trim().length === 0
+        ? "pitch must not be only whitespace"
+        : null;
+if (gateError) {
+  console.error(`error: ${gateError}`);
+  process.exit(1);
 }
 
 const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
-mkdirSync(outputDir, { recursive: true });
-writeFileSync(join(outputDir, "entry.txt"), PITCH, "utf8");
+const outputPath = join(outputDir, "entry.txt");
+// A failed write (e.g. read-only sandbox dir) should be a clear
+// error, not an uncaught stack trace.
+try {
+  mkdirSync(outputDir, { recursive: true });
+  writeFileSync(outputPath, PITCH, "utf8");
+} catch (err) {
+  console.error(`error: could not write ${outputPath}: ${(err as Error).message}`);
+  process.exit(1);
+}
 
 console.log(PITCH);
-console.log(`(${PITCH.length} characters written to ${join(outputDir, "entry.txt")})`);
+console.log(`(${PITCH.length} characters written to ${outputPath})`);
